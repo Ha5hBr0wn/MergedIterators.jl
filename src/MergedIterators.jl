@@ -1,6 +1,5 @@
 module MergedIterators
     using DataStructures
-    using Unrolled
 
     struct SingleIterator{I, V, S}
         iter::I
