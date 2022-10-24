@@ -12,6 +12,14 @@ module MergedIterators
 
     get_state_type(::SingleIterator{I, V, S}) where {I, V, S} = S
 
+    Base.iterate(single_iterator::SingleIterator{I, V, S}) where {I, V, S} = begin
+        iterate(single_iterator.iter)::V
+    end
+
+    Base.iterate(single_iterator::SingleIterator{I, V, S}, state::S) where {I, V, S} = begin
+        iterate(single_iterator.iter, state)::V
+    end
+
     struct MergedIterator{T}
         single_iterators::T
     end
@@ -62,15 +70,15 @@ module MergedIterators
         isequal(a.value, b.value)
     end
 
-    @unroll Base.iterate(merged_iterator::MergedIterator) = begin
+    Base.iterate(merged_iterator::MergedIterator) = begin
         merged_iterator_state = MergedIteratorState(merged_iterator)
-        @unroll for single_iterator in merged_iterator.single_iterators
-            next = iterate(single_iterator)
+        for single_iterator in merged_iterator.single_iterators
+            next = iterate(single_iterator.iter)
             if next === nothing continue end
             push!(merged_iterator_state.heap, MergedIteratorStateNode(single_iterator, next...))
         end
 
-        if isempty(heap)
+        if isempty(merged_iterator_state.heap)
             nothing
         else
             first(merged_iterator_state.heap).value, merged_iterator_state
