@@ -1,5 +1,6 @@
 using MergedIterators: MergedIterator, SingleIterator
 using BenchmarkTools
+using ProfileView: @profview
 
 const a = SingleIterator{Vector{Float64}, Float64, Int64}(rand(10_000_000))
 const b = SingleIterator{Vector{Float64}, Float64, Int64}(rand(10_000_000))
@@ -49,6 +50,6 @@ time_manual_merge_seperate_iters(i1, i2) = begin
     s
 end
 
-@btime time_merged_iter($mi)
+@profview time_merged_iter(mi)
 @btime time_seperate_iters($a, $b)
 @btime time_manual_merge_seperate_iters($a.iter, $b.iter)
