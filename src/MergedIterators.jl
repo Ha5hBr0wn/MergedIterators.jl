@@ -1,6 +1,5 @@
 module MergedIterators
     using DataStructures
-    using Unrolled
 
     struct SingleIterator{I, V, S}
         iter::I
@@ -34,7 +33,8 @@ module MergedIterators
         MergedIterator{T}(single_iterators)
     end
 
-    mutable struct MIStateNode{V, S}
+    mutable struct MIStateNode{I, V, S}
+        const iter::I
         value::Union{V, Nothing}
         state::Union{S, Nothing}
     end
@@ -76,12 +76,16 @@ module MergedIterators
         if next === nothing
             push!(
                 state_nodes, 
-                MIStateNode{get_value_type(single_iterator), get_state_type(single_iterator)}(nothing, nothing)
+                MIStateNode{
+                    get_iterator_type(single_iterator), get_value_type(single_iterator), get_state_type(single_iterator)
+                }(single_iterator.iter, nothing, nothing)
             )
         else
             push!(
                 state_nodes, 
-                MIStateNode{get_value_type(single_iterator), get_state_type(single_iterator)}(next...)
+                MIStateNode{
+                    get_iterator_type(single_iterator), get_value_type(single_iterator), get_state_type(single_iterator)
+                }(single_iterator.iter, next...)
             )
         end
         nothing
@@ -119,9 +123,10 @@ module MergedIterators
         update_min_idx_and_yield!(state)
     end
 
-    Base.iterate(merged_iterator::MergedIterator, state::MIState) = begin
-        next = iterate(merged_iterator.single_iterators[state.min_idx].iter, state.state_nodes[state.min_idx].state)
-        update_state_node!(state.state_nodes[state.min_idx], next)
+    Base.iterate(::MergedIterator, state::MIState) = begin
+        node = state.state_nodes[state.min_idx]
+        next = iterate(node.iter, node.state)
+        update_state_node!(node, next)
         update_min_idx_and_yield!(state)
     end
 

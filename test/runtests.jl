@@ -25,5 +25,9 @@ time_seperate_iters(i1, i2) = begin
     s
 end
 
+time_manual_merge_seperate_iters = begin
+    
+end
+
 @btime time_merged_iter($mi)
-@btime time_seperate_iters($a.iter, $b.iter)
+@btime time_seperate_iters($a, $b)
