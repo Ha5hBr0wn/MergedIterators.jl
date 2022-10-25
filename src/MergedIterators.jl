@@ -1,5 +1,6 @@
 module MergedIterators
     using DataStructures
+    using Unrolled
 
     struct SingleIterator{I, V, S}
         iter::I
@@ -12,18 +13,18 @@ module MergedIterators
     get_state_type(::SingleIterator{I, V, S}) where {I, V, S} = S
 
     Base.iterate(single_iterator::SingleIterator{I, V, S}) where {I, V, S} = begin
-        iterate(single_iterator.iter)::V
+        iterate(single_iterator.iter)::Union{Tuple{V, S}, Nothing}
     end
 
     Base.iterate(single_iterator::SingleIterator{I, V, S}, state::S) where {I, V, S} = begin
-        iterate(single_iterator.iter, state)::V
+        iterate(single_iterator.iter, state)::Union{Tuple{V, S}, Nothing}
     end
 
     struct MergedIterator{T}
         single_iterators::T
     end
 
-    MergedIterator(single_iterators::Vararg{SingleIterator}) = begin
+    MergedIterator(single_iterators...) = begin
         T = Tuple{
             [
                 typeof(single_iterator)
@@ -33,66 +34,95 @@ module MergedIterators
         MergedIterator{T}(single_iterators)
     end
 
-    struct MergedIteratorStateNode{I, V, S}
-        iter::I
-        value::V
-        state::S
+    mutable struct MIStateNode{V, S}
+        value::Union{V, Nothing}
+        state::Union{S, Nothing}
     end
 
-    MergedIteratorStateNode(single_iterator::SingleIterator{I, V, S}, value::V, state::S) where {I, V, S} = begin
-        MergedIteratorStateNode{I, V, S}(single_iterator.iter, value, state)
-    end
-
-    MergedIteratorStateNode(node::MergedIteratorStateNode{I, V, S}, value::V, state::S) where {I, V, S} = begin
-        MergedIteratorStateNode{I, V, S}(node.iter, value, state)
-    end
-
-    struct MergedIteratorState{T}
-        heap::BinaryMinHeap{T}
-    end
-
-    MergedIteratorState(merged_iterator::MergedIterator) = begin
-        node_type = Union{
-            [
-                MergedIteratorStateNode{get_iterator_type(single_iterator), get_value_type(single_iterator), get_state_type(single_iterator)}
-                for single_iterator in merged_iterator.single_iterators
-            ]...
-        }
-        MergedIteratorState{node_type}(BinaryMinHeap{node_type}())
-    end
-
-    Base.isless(a::MergedIteratorStateNode, b::MergedIteratorStateNode) = begin
+    Base.isless(a::MIStateNode, b::MIStateNode) = begin
+        a.value === nothing && return false
+        b.value === nothing && return true
         isless(a.value, b.value)
     end
 
-    Base.isequal(a::MergedIteratorStateNode, b::MergedIteratorStateNode) = begin
+    Base.isequal(a::MIStateNode, b::MIStateNode) = begin
         isequal(a.value, b.value)
     end
 
-    Base.iterate(merged_iterator::MergedIterator) = begin
-        merged_iterator_state = MergedIteratorState(merged_iterator)
-        for single_iterator in merged_iterator.single_iterators
-            next = iterate(single_iterator.iter)
-            if next === nothing continue end
-            push!(merged_iterator_state.heap, MergedIteratorStateNode(single_iterator, next...))
-        end
-
-        if isempty(merged_iterator_state.heap)
-            nothing
-        else
-            first(merged_iterator_state.heap).value, merged_iterator_state
-        end
+    mutable struct MIState{T}
+        const state_nodes::T
+        min_idx::Int64
     end
 
-    Base.iterate(::MergedIterator, merged_iterator_state::MergedIteratorState) = begin
-        node = pop!(merged_iterator_state.heap)
-        next = iterate(node.iter, node.state)            
-        if next !== nothing     
-            push!(merged_iterator_state.heap, MergedIteratorStateNode(node, next...))
-        elseif isempty(merged_iterator_state.heap)
-            return nothing
+    MIState(state_nodes...) = begin
+        T = Tuple{
+            [
+                typeof(state_node)
+                for state_node in state_nodes
+            ]...
+        }
+        MIState{T}(state_nodes, 0)
+    end
+
+    all_nothing(state_nodes) = begin
+        for node in state_nodes
+            node.value === nothing || return false
         end
-        first(merged_iterator_state.heap).value, merged_iterator_state
+        true
+    end
+
+    add_state_node!(state_nodes, single_iterator) = begin
+        next = iterate(single_iterator.iter)
+        if next === nothing
+            push!(
+                state_nodes, 
+                MIStateNode{get_value_type(single_iterator), get_state_type(single_iterator)}(nothing, nothing)
+            )
+        else
+            push!(
+                state_nodes, 
+                MIStateNode{get_value_type(single_iterator), get_state_type(single_iterator)}(next...)
+            )
+        end
+        nothing
+    end
+    
+    create_state_nodes(merged_iterator) = begin
+        state_nodes = Vector{MIStateNode}()
+        for single_iterator in merged_iterator.single_iterators
+            add_state_node!(state_nodes, single_iterator)
+        end
+        state_nodes
+    end
+
+    update_state_node!(state_node, next) = begin
+        if next === nothing
+            state_node.value = nothing
+            state_node.state = nothing
+        else
+            state_node.value, state_node.state = next
+        end
+        nothing
+    end
+
+    update_min_idx_and_yield!(state) = begin
+        if all_nothing(state.state_nodes)
+            nothing
+        else
+            state.min_idx = argmin(state.state_nodes)
+            state.state_nodes[state.min_idx].value, state
+        end
+    end
+    
+    Base.iterate(merged_iterator::MergedIterator) = begin
+        state = MIState(create_state_nodes(merged_iterator)...)
+        update_min_idx_and_yield!(state)
+    end
+
+    Base.iterate(merged_iterator::MergedIterator, state::MIState) = begin
+        next = iterate(merged_iterator.single_iterators[state.min_idx].iter, state.state_nodes[state.min_idx].state)
+        update_state_node!(state.state_nodes[state.min_idx], next)
+        update_min_idx_and_yield!(state)
     end
 
 end
