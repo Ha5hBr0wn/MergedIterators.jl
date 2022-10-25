@@ -12,11 +12,11 @@ module MergedIterators
     get_state_type(::SingleIterator{I, V, S}) where {I, V, S} = S
 
     Base.iterate(single_iterator::SingleIterator{I, V, S}) where {I, V, S} = begin
-        iterate(single_iterator.iter)::V
+        iterate(single_iterator.iter)
     end
 
     Base.iterate(single_iterator::SingleIterator{I, V, S}, state::S) where {I, V, S} = begin
-        iterate(single_iterator.iter, state)::V
+        iterate(single_iterator.iter, state)
     end
 
     struct MergedIterator{T}
