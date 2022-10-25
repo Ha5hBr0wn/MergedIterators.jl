@@ -1,10 +1,10 @@
-using MergedIterators: MergedIterator
+using MergedIterators: MergedIterator, SingleIterator
 using BenchmarkTools
 
-const a = rand(10_000_000)
-const b = rand(10_000_000)
+const a = SingleIterator{Vector{Float64}, Float64, Int64}(rand(10_000_000))
+const b = SingleIterator{Vector{Float64}, Float64, Int64}(rand(10_000_000))
 
-const mi = MergedIterator([a, b])
+const mi = MergedIterator(a, b)
 
 time_merged_iter(m::MergedIterator) = begin
     s = 0.0
@@ -26,4 +26,4 @@ time_seperate_iters(i1, i2) = begin
 end
 
 @btime time_merged_iter($mi)
-@btime time_seperate_iters($a, $b)
+@btime time_seperate_iters($a.iter, $b.iter)
