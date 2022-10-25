@@ -39,6 +39,12 @@ module MergedIterators
         state::Union{S, Nothing}
     end
 
+    get_iterator_type(::MIStateNode{I, V, S}) where {I, V, S} = I
+
+    get_value_type(::MIStateNode{I, V, S}) where {I, V, S} = V
+
+    get_state_type(::MIStateNode{I, V, S}) where {I, V, S} = S
+
     Base.isless(a::MIStateNode, b::MIStateNode) = begin
         a.value === nothing && return false
         b.value === nothing && return true
@@ -123,7 +129,7 @@ module MergedIterators
         update_min_idx_and_yield!(state)
     end
 
-    Base.iterate(::MergedIterator, state::MIState) = begin
+    Base.iterate(::MergedIterator{T}, state::MIState{U}) where {T, U} = begin
         node = state.state_nodes[state.min_idx]
         next = iterate(node.iter, node.state)
         update_state_node!(node, next)
