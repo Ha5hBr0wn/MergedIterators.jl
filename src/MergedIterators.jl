@@ -33,7 +33,7 @@ module MergedIterators
         MergedIterator{T, O}(single_iterators)
     end
 
-    MergedIterator(single_iterators::Vararg{SingleIterator}) = MergedIterator(single_iterators, Base.Order.Forward)
+    MergedIterator(single_iterators::Vararg{SingleIterator}) = MergedIterator(Base.Order.Forward, single_iterators...)
 
     get_ordering_type(::MergedIterator{T, O}) where {T, O} = O
 
@@ -52,7 +52,7 @@ module MergedIterators
     end
 
     struct MergedIteratorState{T, O <: Base.Order.Ordering}
-        heap::BinaryMinHeap{T, O}
+        heap::BinaryHeap{T, O}
     end
 
     MergedIteratorState(merged_iterator::MergedIterator) = begin
@@ -62,15 +62,15 @@ module MergedIterators
                 for single_iterator in merged_iterator.single_iterators
             ]...
         }
-        MergedIteratorState(BinaryMinHeap{node_type, get_ordering_type(merged_iterator)}())
+        MergedIteratorState(BinaryHeap{node_type, get_ordering_type(merged_iterator)}())
     end
 
-    Base.isless(a::MergedIteratorStateNode, b::MergedIteratorStateNode) = begin
-        isless(a.value, b.value)
+    Base.Order.lt(ordering::O, a::MergedIteratorStateNode, b::MergedIteratorStateNode) where O <: Base.Order.Ordering = begin
+        Base.Order.lt(ordering, a.value, b.value)
     end
 
-    Base.isequal(a::MergedIteratorStateNode, b::MergedIteratorStateNode) = begin
-        isequal(a.value, b.value)
+    Base.Order.lt(::Base.Order.ForwardOrdering, a::MergedIteratorStateNode, b::MergedIteratorStateNode) = begin
+        Base.Order.lt(Base.Order.Forward, a.value, b.value)
     end
 
     Base.iterate(merged_iterator::MergedIterator) = begin
