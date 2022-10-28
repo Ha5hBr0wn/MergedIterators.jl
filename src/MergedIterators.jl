@@ -19,19 +19,23 @@ module MergedIterators
         iterate(single_iterator.iter, state)
     end
 
-    struct MergedIterator{T}
+    struct MergedIterator{T, O}
         single_iterators::T
     end
 
-    MergedIterator(single_iterators::Vararg{SingleIterator}) = begin
+    MergedIterator(::O, single_iterators::Vararg{SingleIterator}) where O <: Base.Order.Ordering = begin
         T = Tuple{
             [
                 typeof(single_iterator)
                 for single_iterator in single_iterators
             ]...
         }
-        MergedIterator{T}(single_iterators)
+        MergedIterator{T, O}(single_iterators)
     end
+
+    MergedIterator(single_iterators::Vararg{SingleIterator}) = MergedIterator(single_iterators, Base.Order.Forward)
+
+    get_ordering_type(::MergedIterator{T, O}) where {T, O} = O
 
     struct MergedIteratorStateNode{I, V, S}
         iter::I
@@ -47,8 +51,8 @@ module MergedIterators
         MergedIteratorStateNode{I, V, S}(node.iter, value, state)
     end
 
-    struct MergedIteratorState{T}
-        heap::BinaryMinHeap{T}
+    struct MergedIteratorState{T, O <: Base.Order.Ordering}
+        heap::BinaryMinHeap{T, O}
     end
 
     MergedIteratorState(merged_iterator::MergedIterator) = begin
@@ -58,7 +62,7 @@ module MergedIterators
                 for single_iterator in merged_iterator.single_iterators
             ]...
         }
-        MergedIteratorState{node_type}(BinaryMinHeap{node_type}())
+        MergedIteratorState(BinaryMinHeap{node_type, get_ordering_type(merged_iterator)}())
     end
 
     Base.isless(a::MergedIteratorStateNode, b::MergedIteratorStateNode) = begin
