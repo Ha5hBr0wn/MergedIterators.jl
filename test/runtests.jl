@@ -27,3 +27,44 @@ time_merged_iter(m::MergedIterator, process) = begin
 end
 
 @btime time_merged_iter($mi, SumProcess(0))
+
+merge_and_process(process, i1, i2) = begin
+    next_i1 = iterate(i1)
+    next_i2 = iterate(i2)
+
+    while next_i1 !== nothing || next_i2 !== nothing
+        min_idx = argmin(map(x -> x === nothing ? Inf : x[1], (next_i1, next_i2)))
+        if min_idx == 1
+            process(next_i1[1])
+            next_i1 = iterate(i1, next_i1[2])
+        else
+            process(next_i2[1])
+            next_i2 = iterate(i2, next_i2[2])
+        end
+    end
+end
+
+# merge_and_process(process, i1, i2) = begin
+#     next_i1 = iterate(i1)
+#     next_i2 = iterate(i2)
+
+#     while next_i1 !== nothing || next_i2 !== nothing
+#         if next_i1 === nothing
+#             process(next_i2[1])
+#             next_i2 = iterate(i2, next_i2[2])
+#         elseif next_i2 === nothing
+#             process(next_i1[1])
+#             next_i1 = iterate(i1, next_i1[2])
+#         else
+#             if Base.Order.lt(Base.Order.Forward, next_i1[1], next_i2[1])
+#                 process(next_i1[1])
+#                 next_i1 = iterate(i1, next_i1[2])
+#             else
+#                 process(next_i2[1])
+#                 next_i2 = iterate(i2, next_i2[2])
+#             end
+#         end
+#     end
+# end
+
+@btime merge_and_process(SumProcess(0.0), $d, $e)

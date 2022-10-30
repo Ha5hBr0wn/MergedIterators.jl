@@ -90,4 +90,12 @@ module MergedIterators
         first(merged_iterator_state.heap).value, merged_iterator_state
     end
 
+    abstract type IteratorProcess end
+
+    struct SumProcess <: IteratorProcess
+        s::Float64
+    end
+
+    SumProcess() = SumProcess(0.0)
+
 end
