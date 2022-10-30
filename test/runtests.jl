@@ -1,6 +1,7 @@
 using MergedIterators: MergedIterator, SingleIterator
 using BenchmarkTools
 using DataStructures
+using ProfileView: @profview
 
 const a = SingleIterator{Vector{Int32}, Int32, Int64}(rand(Int32, 10_000_000))
 const b = SingleIterator{Vector{Int8}, Int8, Int64}(rand(Int8, 10_000_000))
