@@ -1,29 +1,26 @@
 module MergedIterators
     using DataStructures
+    using Base: Order.lt, Order.Forward, Order.ForwardOrdering, Order.Ordering
 
     struct SingleIterator{I, V, S}
         iter::I
     end
 
-    get_iterator_type(::SingleIterator{I, V, S}) where {I, V, S} = I
+    get_iterator_type(::Type{SingleIterator{I, V, S}}) where {I, V, S} = I
 
-    get_value_type(::SingleIterator{I, V, S}) where {I, V, S} = V
+    get_value_type(::Type{SingleIterator{I, V, S}}) where {I, V, S} = V
 
-    get_state_type(::SingleIterator{I, V, S}) where {I, V, S} = S
+    get_state_type(::Type{SingleIterator{I, V, S}}) where {I, V, S} = S
 
-    Base.iterate(single_iterator::SingleIterator{I, V, S}) where {I, V, S} = begin
-        iterate(single_iterator.iter)
-    end
+    Base.iterate(single_iterator::SingleIterator)  = iterate(single_iterator.iter)
 
-    Base.iterate(single_iterator::SingleIterator{I, V, S}, state::S) where {I, V, S} = begin
-        iterate(single_iterator.iter, state)
-    end
+    Base.iterate(single_iterator::SingleIterator{I, V, S}, state::S) where {I, V, S} = iterate(single_iterator.iter, state)
 
     struct MergedIterator{T, O}
         single_iterators::T
     end
 
-    MergedIterator(::O, single_iterators::Vararg{SingleIterator}) where O <: Base.Order.Ordering = begin
+    MergedIterator(::O, single_iterators::Vararg{SingleIterator}) where O <: Ordering = begin
         T = Tuple{
             [
                 typeof(single_iterator)
@@ -33,9 +30,7 @@ module MergedIterators
         MergedIterator{T, O}(single_iterators)
     end
 
-    MergedIterator(single_iterators::Vararg{SingleIterator}) = MergedIterator(Base.Order.Forward, single_iterators...)
-
-    get_ordering_type(::MergedIterator{T, O}) where {T, O} = O
+    MergedIterator(single_iterators::Vararg{SingleIterator}) = MergedIterator(Forward, single_iterators...)
 
     struct MergedIteratorStateNode{I, V, S}
         iter::I
@@ -51,27 +46,23 @@ module MergedIterators
         MergedIteratorStateNode{I, V, S}(node.iter, value, state)
     end
 
-    struct MergedIteratorState{T, O <: Base.Order.Ordering}
+    struct MergedIteratorState{T, O <: Ordering}
         heap::BinaryHeap{T, O}
     end
 
-    MergedIteratorState(merged_iterator::MergedIterator) = begin
+    MergedIteratorState(::MergedIterator{T, O}) where {T, O <: Ordering} = begin
         node_type = Union{
             [
-                MergedIteratorStateNode{get_iterator_type(single_iterator), get_value_type(single_iterator), get_state_type(single_iterator)}
-                for single_iterator in merged_iterator.single_iterators
+                MergedIteratorStateNode{get_iterator_type(single_iterator_type), get_value_type(single_iterator_type), get_state_type(single_iterator_type)}
+                for single_iterator_type in fieldtypes(T)
             ]...
         }
-        MergedIteratorState(BinaryHeap{node_type, get_ordering_type(merged_iterator)}())
+        MergedIteratorState{node_type, O}(BinaryHeap{node_type, O}())
     end
 
-    Base.Order.lt(ordering::O, a::MergedIteratorStateNode, b::MergedIteratorStateNode) where O <: Base.Order.Ordering = begin
-        Base.Order.lt(ordering, a.value, b.value)
-    end
+    Base.Order.lt(ordering::O, a::MergedIteratorStateNode, b::MergedIteratorStateNode) where O <: Ordering = lt(ordering, a.value, b.value)
 
-    Base.Order.lt(::Base.Order.ForwardOrdering, a::MergedIteratorStateNode, b::MergedIteratorStateNode) = begin
-        Base.Order.lt(Base.Order.Forward, a.value, b.value)
-    end
+    Base.Order.lt(::ForwardOrdering, a::MergedIteratorStateNode, b::MergedIteratorStateNode) = lt(Forward, a.value, b.value)
 
     Base.iterate(merged_iterator::MergedIterator) = begin
         merged_iterator_state = MergedIteratorState(merged_iterator)

@@ -11,12 +11,18 @@ const e = SingleIterator{Vector{Float64}, Float64, Int64}(rand(10_000_000))
 
 const mi = MergedIterator(d, e)
 
-time_merged_iter(m::MergedIterator) = begin
-    s = 0.0
-    for x in m
-        s += x
-    end
-    s
+mutable struct SumProcess
+    s::Float64
 end
 
-@btime time_merged_iter($mi)
+(s::SumProcess)(x) = begin
+    s.s += x
+end
+
+time_merged_iter(m::MergedIterator, process) = begin
+    for x in m
+        process(x)
+    end
+end
+
+@btime time_merged_iter($mi, SumProcess(0))
