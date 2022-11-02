@@ -1,6 +1,6 @@
 using MergedIterators: 
     MergedIterators, MergedIterator, SingleIterator, @merge_and_process, 
-    get_iterator_type, get_value_type, get_state_type, @custom_order, IteratorProcess
+    get_iterator_type, get_value_type, get_state_type, @custom_generic_lt, IteratorProcess
 using Test
 
 @testset "single iterator" begin
@@ -62,7 +62,7 @@ end
     siter6 = SingleIterator{typeof(iter6), Real, Int64}(iter6)
 
     struct AbsOrder <: Base.Order.Ordering end
-    @custom_order Base.Order.lt(::AbsOrder, a, b) = Base.Order.lt(Base.Order.Forward, abs(a), abs(b))
+    @custom_generic_lt Base.Order.lt(::AbsOrder, a, b) = Base.Order.lt(Base.Order.Forward, abs(a), abs(b))
 
     miter2 = MergedIterator(AbsOrder(), siter5, siter6)
 
