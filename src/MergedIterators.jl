@@ -1,7 +1,10 @@
 module MergedIterators
+    ######################### using statements #######################
     using DataStructures
     using Base: Order.lt, Order.Forward, Order.ForwardOrdering, Order.Ordering
 
+
+    ####################### single iterator ##########################
     struct SingleIterator{I, V, S}
         iter::I
     end
@@ -12,10 +15,12 @@ module MergedIterators
 
     get_state_type(::Type{SingleIterator{I, V, S}}) where {I, V, S} = S
 
-    Base.iterate(single_iterator::SingleIterator)  = iterate(single_iterator.iter)
+    Base.iterate(single_iterator::SingleIterator{I, V, S}) where {I, V, S}  = iterate(single_iterator.iter)::Union{Tuple{V, S}, Nothing}
 
-    Base.iterate(single_iterator::SingleIterator{I, V, S}, state::S) where {I, V, S} = iterate(single_iterator.iter, state)
+    Base.iterate(single_iterator::SingleIterator{I, V, S}, state::S) where {I, V, S} = iterate(single_iterator.iter, state)::Union{Tuple{V, S}, Nothing}
 
+    
+    ########################### merged iterator ########################
     struct MergedIterator{T, O}
         single_iterators::T
     end
@@ -42,8 +47,18 @@ module MergedIterators
         MergedIteratorStateNode{I, V, S}(single_iterator.iter, value, state)
     end
 
+    MergedIteratorStateNode(::SingleIterator{I, V, S}, ::V2, ::S2) where {I, V, S, V2, S2} = begin
+        V == V2 || error("Value type not stable, expected $V but got $V2. Try changing the value type parameter to a Union for the SingleIterator")
+        S == S2 || error("State type not stable, expected $S but got $S2. Try changing the state type parameter to a Union for the SingleIterator")
+    end
+
     MergedIteratorStateNode(node::MergedIteratorStateNode{I, V, S}, value::V, state::S) where {I, V, S} = begin
         MergedIteratorStateNode{I, V, S}(node.iter, value, state)
+    end
+
+    MergedIteratorStateNode(::MergedIteratorStateNode{I, V, S}, ::V2, ::S2) where {I, V, S, V2, S2} = begin
+        V == V2 || error("Value type not stable, expected $V but got $V2. Try changing the value type parameter to a Union for the SingleIterator")
+        S == S2 || error("State type not stable, expected $S but got $S2. Try changing the state type parameter to a Union for the SingleIterator")
     end
 
     struct MergedIteratorState{T, O <: Ordering}
@@ -90,12 +105,85 @@ module MergedIterators
         first(merged_iterator_state.heap).value, merged_iterator_state
     end
 
+
+    ###################### Macro Interface (highly efficient) ########################
     abstract type IteratorProcess end
 
-    struct SumProcess <: IteratorProcess
-        s::Float64
+    check_inputs(process, iters...) = begin
+        quote
+            @assert $(esc(process)) isa MergedIterators.IteratorProcess
+            @assert length($(esc(iters))) >= 2
+        end
     end
-
-    SumProcess() = SumProcess(0.0)
+    
+    next_var(i) = Symbol("next_", i)
+    
+    next_vars_tuple(max_i) = begin
+       s = "(" * join(["next_$i" for i in 1:max_i], ",") * ")"
+        Meta.parse(s)
+    end
+    
+    initial_setup(iters...) = begin
+        v = Vector{Expr}()
+        for (i, iter) in enumerate(iters)
+            push!(v, :($(next_var(i)) = iterate($(esc(iter)))))
+        end
+        Expr(:block, v...)
+    end
+    
+    while_condition(iters...) = begin
+        Meta.parse(join(["next_$i !== nothing" for i in 1:length(iters)], " || "))
+    end
+    
+    process_and_iterate(process, iter, i) = begin
+        """
+        $process($(next_var(i))[1])
+        $(next_var(i)) = iterate($iter, $(next_var(i))[2])
+        """
+    end
+    
+    if_else_statements(process, iters...) = begin
+        v = Vector{Expr}()
+        for (i, iter) in enumerate(iters)    
+            e = quote
+                if min_idx == $i
+                    $(esc(process))($(next_var(i))[1])
+                    $(next_var(i)) = iterate($(esc(iter)), $(next_var(i))[2])
+                    continue
+                end
+            end
+            push!(v, e)
+        end
+        Expr(:block, v...)
+    end
+    
+    while_loop(process, iters...) = begin
+        while_condition_code = while_condition(iters...)
+        if_else_statements_code = if_else_statements(process, iters...)
+        
+        quote
+            while $while_condition_code
+                min_idx = argmin(map(x -> x === nothing ? Inf : x[1], $(next_vars_tuple(length(iters)))))
+                $if_else_statements_code
+            end
+        end
+    end
+    
+    macro merge_and_process(process, iters...) 
+        check_inputs_code = check_inputs(process, iters...)
+        initial_setup_code = initial_setup(iters...)
+        while_loop_code = while_loop(process, iters...)
+        
+        quote
+            _merge_and_process() = begin
+                $(check_inputs_code)
+                $(initial_setup_code)
+                $(while_loop_code)
+                $(esc(process))
+            end
+    
+            _merge_and_process()
+        end
+    end
 
 end
