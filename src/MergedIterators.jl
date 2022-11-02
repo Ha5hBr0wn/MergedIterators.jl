@@ -105,7 +105,7 @@ module MergedIterators
     ###################### defining orderings ############################
     Base.Order.lt(::ForwardOrdering, a::MergedIteratorStateNode, b::MergedIteratorStateNode) = lt(Forward, a.value, b.value)
 
-    macro custom_generic_lt(lt_func)
+    macro custom_lt(lt_func)
         ordering_type = lt_func.args[1].args[2].args[end]
         unwrap_node_lt_func = quote
             Base.Order.lt(
