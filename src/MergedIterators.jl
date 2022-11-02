@@ -75,10 +75,6 @@ module MergedIterators
         MergedIteratorState{node_type, O}(BinaryHeap{node_type, O}())
     end
 
-    Base.Order.lt(ordering::O, a::MergedIteratorStateNode, b::MergedIteratorStateNode) where O <: Ordering = lt(ordering, a.value, b.value)
-
-    Base.Order.lt(::ForwardOrdering, a::MergedIteratorStateNode, b::MergedIteratorStateNode) = lt(Forward, a.value, b.value)
-
     Base.iterate(merged_iterator::MergedIterator) = begin
         merged_iterator_state = MergedIteratorState(merged_iterator)
         for single_iterator in merged_iterator.single_iterators
@@ -105,9 +101,31 @@ module MergedIterators
         first(merged_iterator_state.heap).value, merged_iterator_state
     end
 
+    
+    ###################### defining orderings ############################
+    Base.Order.lt(::ForwardOrdering, a::MergedIteratorStateNode, b::MergedIteratorStateNode) = lt(Forward, a.value, b.value)
 
-    ###################### Macro Interface (highly efficient) ########################
+    macro custom_order(lt_func)
+        ordering_type = lt_func.args[1].args[2].args[1]
+        unwrap_node_lt_func = quote
+            Base.Order.lt(
+                o::$ordering_type, 
+                a::MergedIterators.MergedIteratorStateNode, 
+                b::MergedIterators.MergedIteratorStateNode
+            ) = Base.Order.lt(o, a.value, b.value)
+        end
+    
+        quote
+            $(esc(lt_func))
+            $(esc(unwrap_node_lt_func))
+        end
+    end
+
+
+    ###################### macro interface (highly efficient) ########################
     abstract type IteratorProcess end
+
+    rank_key(x) = convert(Float64, x)
 
     check_inputs(process, iters...) = begin
         quote
@@ -163,7 +181,7 @@ module MergedIterators
         
         quote
             while $while_condition_code
-                min_idx = argmin(map(x -> x === nothing ? Inf : x[1], $(next_vars_tuple(length(iters)))))
+                min_idx = argmin(map(x -> x === nothing ? Inf : MergedIterators.rank_key(x[1]), $(next_vars_tuple(length(iters)))))
                 $if_else_statements_code
             end
         end
@@ -175,14 +193,10 @@ module MergedIterators
         while_loop_code = while_loop(process, iters...)
         
         quote
-            _merge_and_process() = begin
-                $(check_inputs_code)
-                $(initial_setup_code)
-                $(while_loop_code)
-                $(esc(process))
-            end
-    
-            _merge_and_process()
+            $(check_inputs_code)
+            $(initial_setup_code)
+            $(while_loop_code)
+            $(esc(process))
         end
     end
 
